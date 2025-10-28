@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ShowTails OCR Pedigree Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background-color: #f9fafb;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    h1 { color: #333; }
+    #preview {
+      margin-top: 20px;
+      max-width: 90%;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+    }
+    #output {
+      white-space: pre-wrap;
+      text-align: left;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-top: 20px;
+      border-radius: 10px;
+      font-family: monospace;
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+    #progress { margin-top: 10px; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>🐇 ShowTails OCR Pedigree Scanner</h1>
+  <p>The image uploaded in Glide will be processed automatically when this page loads.</p>
+
+  <div id="progress">Waiting for image URL...</div>
+  <img id="preview" alt="">
+  <div id="output"></div>
+
+  <script src="tesseract.min.js"></script>
+  <script src="ocr.js"></script>
+</body>
+</html>
