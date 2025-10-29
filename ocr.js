@@ -16,13 +16,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   progress.textContent = 'Loading and scanning image...';
 
   const { createWorker } = Tesseract;
-  const worker = await createWorker({
-    logger: m => {
-      if (m.status === 'recognizing text') {
-        progress.textContent = `Scanning: ${(m.progress * 100).toFixed(1)}%`;
-      }
-    }
-  });
+ function updateProgress(m) {
+  if (m.status === 'recognizing text') {
+    progress.textContent = `Scanning: ${(m.progress * 100).toFixed(1)}%`;
+  }
+}
+
+// Create the worker and assign the logger
+const worker = await Tesseract.createWorker();
+worker.logger = updateProgress;
 
   await worker.loadLanguage('eng');
   await worker.initialize('eng');
