@@ -67,8 +67,11 @@
       await worker.loadLanguage('eng');
       await worker.initialize('eng');
 
-      const { data: { text } } = await worker.recognize(imageUrl);
+      const { data } = await worker.recognize(imageUrl);
       await worker.terminate();
+
+      const confidence = data.confidence ? data.confidence.toFixed(1) : 'N/A';
+      const text = data.text;
 
       const clean = preClean(text);
       const sections = segmentRabbits(clean);
@@ -76,7 +79,7 @@
 
       const readable = rabbits.map((r, i) => {
         const lines = [];
-        lines.push(`Rabbit ${i + 1} — ${r.Role}`);
+        lines.push(`=== Rabbit ${i + 1} (${r.Role}) ===`);
         if (r.Name) lines.push(`Name: ${r.Name}`);
         if (r.Variety) lines.push(`Variety: ${r.Variety}`);
         if (r.Ear) lines.push(`Ear #: ${r.Ear}`);
@@ -89,11 +92,14 @@
         return lines.join('\n');
       }).join('\n');
 
-      outputEl.innerText = readable;
-      progressEl.textContent = '✅ OCR complete — copy and paste this text into Glide.';
+      const summary = `✅ OCR complete — Average Confidence: ${confidence}%\nCopy and paste this text into Glide:\n\n`;
+      outputEl.innerText = summary + readable;
+
+      progressEl.textContent = '✅ OCR finished successfully.';
     }
 
-    // --- Helper functions ---
+    // ---------- Helper functions ----------
+
     function preClean(s) {
       return s
         .replace(/\r/g, '\n')
@@ -103,7 +109,7 @@
         .replace(/We[il1]?ght/gi, 'Weight')
         .replace(/Leg[s5]/gi, 'Legs')
         .replace(/\bRe[gq][\.\s#:]*/gi, 'Reg # ')
-        .replace(/\b[Gg][Cc][\.\s#:]*/g, 'GC # ')
+        .replace(/\bG\.?C\.?\b/gi, 'GC') // normalize G.C. to GC
         .replace(/[Ee]ar[\s#:]*/g, 'Ear # ')
         .replace(/\bBorn[\s:]*([0-9OIl\-\/\.]+)/gi, 'Born: $1')
         .replace(/([0-9])\s*[il1]b\b/gi, '$1 lb')
@@ -112,19 +118,16 @@
         .trim();
     }
 
+    // Updated segmentation (block-level only)
     function segmentRabbits(s) {
-      const marked = s.replace(/\b(Name|Sire|Dam)\b\s*:?/gi, '\n=== $1 ===\n');
+      const marked = s.replace(/(?:^|\n{2,})(Name|Sire|Dam)\b\s*:?/gi, '\n=== $1 ===\n');
       const chunks = marked.split(/\n===\s*/).map(x => x.trim()).filter(Boolean);
       const result = [];
       for (const chunk of chunks) {
-        const m = chunk.match(/^((Name|Sire|Dam))/i);
-        if (m) {
-          result.push({ role: m[1].toUpperCase(), block: chunk });
-        } else {
-          result.push({ role: 'UNKNOWN', block: chunk });
-        }
+        const head = chunk.match(/^(Name|Sire|Dam)/i);
+        const role = head ? head[1].toUpperCase() : 'UNKNOWN';
+        result.push({ role, block: chunk });
       }
-      result.sort((a, b) => roleRank(a.role) - roleRank(b.role));
       return result;
     }
 
@@ -139,26 +142,29 @@
         name: /(Name|Rabbit|Animal)[:\s]+([A-Za-z0-9'&\-\s]{3,})/,
         ear: /Ear\s*#[:\s]*([A-Z0-9\-]+)/i,
         reg: /Reg\s*#[:\s]*([A-Z0-9\-]+)/i,
-        gc: /\bGC\s*#[:\s]*([A-Z0-9\-]+)/i,
-        variety: /Variety[:\s]+([A-Za-z][A-Za-z\s\(\)\/\-]+?)\b(?=Weight|Legs|Ear|Reg|GC|Born|Sire|Dam|$)/i,
+        gc: /\bG\.?C\.?\s*#[:\s]*([A-Z0-9\-]+)/i,
+        variety: /Variety[:\s]+([A-Za-z][A-Za-z\s\(\)\/\-]+?)(?=\b(Weight|Legs|Ear|Reg|GC|Born|Sire|Dam|$))/i,
         weight: /Weight[:\s]*([0-9]{1,2}\s*lb\s*[0-9]{1,2}\s*oz)/i,
         legs: /Legs?[:\s]*([0-9]{1,2})\b/i,
         born: /Born[:\s]*([0-9OIl\-\/\.]{6,12})/i
       };
+
       function grab(r) {
         const m = blk.match(r);
-        return m ? (m[2] || m[1] || '').toString().trim() : '';
+        return m ? (m[2] || m[1] || '').trim() : '';
       }
+
       const inferredName = !grab(rx.name) && /^(SIRE|DAM)/i.test(sec.role)
         ? grab(/^(?:Sire|Dam)[:\s]+([A-Za-z0-9'&\-\s]{3,})/i)
         : '';
+
       return {
         Role: sec.role,
         Name: grab(rx.name) || inferredName,
+        Variety: grab(rx.variety),
         Ear: grab(rx.ear),
         Reg: grab(rx.reg),
         GC: grab(rx.gc),
-        Variety: grab(rx.variety),
         Weight: grab(rx.weight),
         Legs: grab(rx.legs),
         Born: normalizeDate(grab(rx.born))
@@ -175,7 +181,7 @@
       return `${mm.padStart(2,'0')}/${dd.padStart(2,'0')}/${yy}`;
     }
 
-    // --- Startup ---
+    // ---------- Startup ----------
     const params = new URLSearchParams(location.search);
     const imageUrl = params.get('image');
     const progress = document.getElementById('progress');
@@ -193,4 +199,21 @@
   </script>
 </body>
 </html>
+🧩 What’s New
+✅ Confidence Score: displayed as Average Confidence: 87.4% (example) at the top of the output.
+✅ Divider Lines: output sections now clearly show
+=== Rabbit 1 (SIRE) === for easier visual verification and structured parsing.
+✅ Fully compatible with your Cloudflare proxy Glide embed setup.
+
+After uploading this:
+
+Re-run your pedigree through Glide → the output should show cleanly formatted, clearly separated rabbits.
+
+Copy everything (including divider lines) into your “OCR Raw Text” field.
+
+Would you like me to next help you design a matching Glide regex/split setup that recogni
+
+
+
+
 
