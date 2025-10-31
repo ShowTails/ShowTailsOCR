@@ -54,7 +54,6 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <script>
-    // ----------- MAIN OCR FUNCTION -----------
     async function runOCR(imageUrl, progressEl, outputEl) {
       function updateProgress(m) {
         if (m.status === 'recognizing text') {
@@ -62,7 +61,6 @@
         }
       }
 
-      // Load image into a canvas
       const img = new Image();
       img.crossOrigin = 'Anonymous';
       img.src = imageUrl;
@@ -76,27 +74,30 @@
       canvas.height = H;
       ctx.drawImage(img, 0, 0);
 
-      // ----------- IMAGE PRE-PROCESSING -----------
+      // --- Preprocess for better OCR ---
       const imageData = ctx.getImageData(0, 0, W, H);
       const dataArr = imageData.data;
       for (let i = 0; i < dataArr.length; i += 4) {
         const avg = (dataArr[i] + dataArr[i + 1] + dataArr[i + 2]) / 3;
-        const val = avg > 180 ? 255 : 0; // threshold; lower if text is faint
+        const val = avg > 180 ? 255 : 0;
         dataArr[i] = dataArr[i + 1] = dataArr[i + 2] = val;
       }
       ctx.putImageData(imageData, 0, 0);
 
-      // Define four generation slices
       const generations = [
-        { name: "Rabbit", x: 0,        w: W * 0.22 },
+        { name: "Rabbit", x: 0, w: W * 0.22 },
         { name: "Parents", x: W * 0.22, w: W * 0.24 },
         { name: "Grandparents", x: W * 0.46, w: W * 0.26 },
         { name: "GreatGrandparents", x: W * 0.72, w: W * 0.28 }
       ];
 
-      // Create and configure Tesseract worker (CDN-safe)
-      const worker = await Tesseract.createWorker();
-      worker.logger = updateProgress;
+      // --- Create worker with explicit paths (fix for embedded browser) ---
+      const worker = await Tesseract.createWorker({
+        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+        langPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/lang/',
+        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/dist/tesseract-core-simd.wasm.js',
+        logger: updateProgress
+      });
 
       await worker.loadLanguage('eng');
       await worker.initialize('eng');
@@ -108,7 +109,6 @@
       let combinedText = '';
       let confidences = [];
 
-      // Run OCR for each generation
       for (let g of generations) {
         const crop = document.createElement('canvas');
         crop.width = g.w;
@@ -127,68 +127,27 @@
         ? (confidences.reduce((a, b) => a + b, 0) / confidences.length).toFixed(1)
         : 'N/A';
 
-      // --- Parsing & Output ---
-      const clean = preClean(combinedText);
-      const sections = segmentRabbits(clean);
-      const rabbits = sections.map(parseSection);
-
-      const readable = rabbits.map((r, i) => {
-        const lines = [];
-        lines.push(`=== Rabbit ${i + 1} (${r.Role}) ===`);
-        if (r.Name) lines.push(`Name: ${r.Name}`);
-        if (r.Variety) lines.push(`Variety: ${r.Variety}`);
-        if (r.Ear) lines.push(`Ear #: ${r.Ear}`);
-        if (r.Reg) lines.push(`Reg #: ${r.Reg}`);
-        if (r.GC) lines.push(`GC #: ${r.GC}`);
-        if (r.Weight) lines.push(`Weight: ${r.Weight}`);
-        if (r.Legs) lines.push(`Legs: ${r.Legs}`);
-        if (r.Born) lines.push(`Born: ${r.Born}`);
-        lines.push('');
-        return lines.join('\n');
-      }).join('\n');
-
       outputEl.innerText =
-        `✅ OCR complete — Average Confidence: ${avgConf}%\nCopy and paste this text into Glide:\n\n` +
-        readable;
+        `✅ OCR complete — Average Confidence: ${avgConf}%\nCopy and paste this text into Glide:\n\n${combinedText}`;
 
       progressEl.textContent = '✅ OCR finished successfully.';
     }
 
-    // ----------- CLEANING + PARSING UTILITIES -----------
-    function preClean(s) {
-      return s
-        .replace(/\r/g, '\n')
-        .replace(/\n{2,}/g, '\n')
-        .replace(/[ \t]{2,}/g, ' ')
-        .replace(/ariety/gi, 'Variety')
-        .replace(/We[il1]?ght/gi, 'Weight')
-        .replace(/Leg[s5]/gi, 'Legs')
-        .replace(/\bRe[gq][\.\s#:]*/gi, 'Reg # ')
-        .replace(/\bG\.?C\.?\b/gi, 'GC')
-        .replace(/[Ee]ar[\s#:]*/g, 'Ear # ')
-        .replace(/\bBorn[\s:]*([0-9OIl\-\/\.]+)/gi, 'Born: $1')
-        .replace(/([0-9])\s*[il1]b\b/gi, '$1 lb')
-        .replace(/\b([0-9])\s*[o0]z\b/gi, '$1 oz')
-        .replace(/[|]/g, ' ')
-        .trim();
-    }
+    const params = new URLSearchParams(location.search);
+    const imageUrl = params.get('image');
+    const progress = document.getElementById('progress');
+    const output = document.getElementById('output');
+    const preview = document.getElementById('preview');
 
-    function segmentRabbits(s) {
-      const marked = s.replace(/(?:^|\n{2,})(Name|Sire|Dam)\b\s*:?/gi, '\n=== $1 ===\n');
-      const chunks = marked.split(/\n===\s*/).map(x => x.trim()).filter(Boolean);
-      const result = [];
-      for (const chunk of chunks) {
-        const head = chunk.match(/^(Name|Sire|Dam)/i);
-        const role = head ? head[1].toUpperCase() : 'UNKNOWN';
-        result.push({ role, block: chunk });
-      }
-      return result;
+    if (imageUrl) {
+      preview.src = imageUrl;
+      runOCR(imageUrl, progress, output).catch(err => {
+        progress.textContent = '❌ OCR failed: ' + (err?.message || err);
+        console.error(err);
+      });
+    } else {
+      progress.textContent = '❌ No image URL detected. Add ?image= to your link.';
     }
-
-    function parseSection(sec) {
-      const blk = ' ' + sec.block.replace(/\n/g, ' ') + ' ';
-      const rx = {
-        name: /(Name|Rabbit|Animal)[:\s]+([A-Za-z0-9'&\-\s]{3,})/,
-        ear: /Ear\s*#[:\s]*([A-Z0-9\-]+)/i,
-        reg: /Reg\s*#[:\s]*([A-Z0-9\-]+)/i,
-        gc: /\bG\.?C\.?
+  </script>
+</body>
+</html>
