@@ -50,8 +50,8 @@
   <img id="preview" alt="Pedigree preview" />
   <div id="output"></div>
 
-  <!-- Tesseract.js -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <!-- ✅ Local copy of Tesseract.js -->
+  <script src="./tesseract/tesseract.min.js"></script>
 
   <script>
     async function runOCR(imageUrl, progressEl, outputEl) {
@@ -74,7 +74,7 @@
       canvas.height = H;
       ctx.drawImage(img, 0, 0);
 
-      // --- Preprocess for better OCR ---
+      // --- Simple pre-processing to improve contrast ---
       const imageData = ctx.getImageData(0, 0, W, H);
       const dataArr = imageData.data;
       for (let i = 0; i < dataArr.length; i += 4) {
@@ -91,13 +91,13 @@
         { name: "GreatGrandparents", x: W * 0.72, w: W * 0.28 }
       ];
 
-      // --- Create worker with explicit paths (fix for embedded browser) ---
-    const worker = await Tesseract.createWorker({
-  workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
-  langPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/lang/',
-  corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/dist/tesseract-core.wasm.js'
-});
-worker.logger = updateProgress;
+      // --- ✅ Create worker using local files (Glide-safe) ---
+      const worker = await Tesseract.createWorker({
+        workerPath: './tesseract/worker.min.js',
+        corePath: './tesseract/tesseract-core.wasm.js',
+        langPath: './tesseract/',
+        logger: updateProgress
+      });
 
       await worker.loadLanguage('eng');
       await worker.initialize('eng');
@@ -133,6 +133,7 @@ worker.logger = updateProgress;
       progressEl.textContent = '✅ OCR finished successfully.';
     }
 
+    // --- Startup logic: get image URL from query string ---
     const params = new URLSearchParams(location.search);
     const imageUrl = params.get('image');
     const progress = document.getElementById('progress');
