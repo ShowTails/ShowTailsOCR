@@ -92,12 +92,12 @@
       ];
 
       // --- Create worker with explicit paths (fix for embedded browser) ---
-      const worker = await Tesseract.createWorker({
-        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
-        langPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/lang/',
-        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/dist/tesseract-core.js',
-        logger: updateProgress
-      });
+    const worker = await Tesseract.createWorker({
+  workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+  langPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/lang/',
+  corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/dist/tesseract-core.wasm.js'
+});
+worker.logger = updateProgress;
 
       await worker.loadLanguage('eng');
       await worker.initialize('eng');
